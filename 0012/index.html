@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en-US">
+  <head>
+    <meta charset="utf-8" />
+    <meta property="og:image" content="http://hidinginabunker.github.com/MyLogicIsSound/0012/thumbnail.png" />
+    <title>MyLogicIsSound | 0012 | web audio test</title>
+    <style>
+      * { margin:0; padding:0; }
+
+      body {
+        background-color: rgb(18,18,18);
+        font-family: 'Helvetica' 'sans-serif';
+        font-weight: 100;
+        color: rgb(244,238,224);
+        font-size: 14px;
+        padding: 80px;
+      }
+
+      h1 {
+        font-size: 3em;
+        padding-left: 13px;
+      }
+
+      a {
+        color: rgb(244,238,224);
+        text-decoration: underline;
+      }
+
+      a.view-source {
+        position: absolute;
+        bottom: 20px;
+        left: 20px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>web audio test</h1>
+    <a class="view-source" href="https://github.com/hidinginabunker/MyLogicIsSound/blob/master/0012/index.html">Source</a>
+
+    <div class="controls">
+
+      <div class="bufferControls">
+        <h2>Sound Buffer Controls</h2>
+        <button id="playBufferBtn">Play</button>
+      </div>
+
+      <div class="oscControls">
+        <h2>Oscillator Controls</h2>
+        <button id="playOscBtn">Play</button>
+        <button id="pauseOscBtn">Pause</button>
+      </div>
+
+    </div>
+
+    <script type="text/javascript">
+      /* Notes
+         TODO:
+          - resample
+          - rethumbnail
+          - eventually we should think of the audio context as a directed graph
+          - A BuffersCollection that lets you get buffers by name when load buffer is called
+            it would load to the buffers collection
+          - for some fucking reason calling stop() on an AudioSource will keep it from
+            ever making a sound again, so you have to dynamically create and destroy 
+            AudioSource nodes all the time
+      */
+
+      var App = function() {
+
+        var self = this;
+
+        window.onload = function() {
+          self.init()
+        }
+
+      }
+
+
+      App.prototype.init = function() {
+
+        var self = this
+
+        // set element references
+        this.playBufferBtn = document.getElementById('playBufferBtn')
+        this.playOscBtn    = document.getElementById('playOscBtn')
+        this.pauseOscBtn   = document.getElementById('pauseOscBtn')
+
+
+        // create the audio context
+
+        try {
+          this.ctx = new webkitAudioContext()
+        } catch(e) {
+          console.log("gross! your browser doesn't support the web audio api")
+          console.log(e)
+        }
+
+        // load sound buffers
+
+        this.loadBuffer('coin.mp3', function(buffer){
+          self.buffer = buffer;
+        }, function(e){ console.error('error loading sample', e)})
+
+        // create the initial oscillator
+        this.sineOsc = this.ctx.createOscillator()
+        this.sineOsc.type = 'sine'
+        this.sineOsc.connect(this.ctx.destination)
+
+
+        //TODO, don't attach listeners until buffer is loaded
+
+        // attach event listeners
+        this.playBufferBtn.addEventListener('click', function(e){
+          self.playBuffer(self.buffer, 0)
+        }, false)
+
+        this.playOscBtn.addEventListener('click', function(e){
+          console.log('yo', e)
+          self.playOsc(0)
+        }, false)
+
+        this.pauseOscBtn.addEventListener('click', function(e){
+          console.log('hi', e)
+          self.stopOsc(0)
+        }, false)
+
+      }
+
+
+      // asynchronously loads an audio file to a buffer
+      App.prototype.loadBuffer = function(url, onSuccess, onError) {
+        // onSuccess(buffer) passes the audio buffer to the callback
+        var self = this
+          , req = new XMLHttpRequest();
+
+        req.open('GET', url, true)
+        req.responseType = 'arraybuffer' // this is audio data sucka
+
+        req.onload = function() {
+          self.ctx.decodeAudioData(req.response, onSuccess, onError)
+        }
+
+        req.send()
+      }
+
+
+      // plays a given buffer of samples
+      App.prototype.playBuffer = function(buffer, when) {
+        var src = this.ctx.createBufferSource()
+        src.buffer = buffer;
+        src.connect(this.ctx.destination)
+        src.start(when)
+        return src
+      }
+
+      App.prototype.playOsc = function(when) {
+        this.sineOsc = this.sineOsc || this.ctx.createOscillator()
+        this.sineOsc.connect(this.ctx.destination)
+        this.sineOsc.start(when)
+      }
+
+      App.prototype.stopOsc = function(when) {
+        if(!this.sineOsc) return;
+        this.sineOsc.stop(when);
+        this.sineOsc = undefined;
+      }
+
+      var app = new App();
+
+    </script>
+  </body>
+</html>
