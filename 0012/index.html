@@ -77,6 +77,14 @@
         this.scaleFreqs = []
       }
 
+      function getRandomInt (min, max) {
+          return Math.floor(Math.random() * (max - min + 1)) + min;
+      }
+
+      function getRandom(min, max) {
+          return Math.random() * (max - min) + min;
+      }
+
       var App = function() {
 
         var self = this;
@@ -105,7 +113,61 @@
         } catch(e) {
           console.log("gross! your browser doesn't support the web audio api")
           console.log(e)
+          return
         }
+
+        // create two gain nodes
+        //TODO attach two html sliders to these gain nodes
+        this.gain1 = this.ctx.createGainNode()
+        this.gain2 = this.ctx.createGainNode()
+
+        this.gain1.gain.value = 0.5
+
+        this.gain1.connect(this.ctx.destination)
+        this.gain2.connect(this.ctx.destination)
+
+        // create static C minor scale
+        this.scale = [
+          264.0, //C
+          297.0, //D
+          316.8, //E
+          352.0, //F
+          396.0, //G
+          442.4, //A
+          475.4, //B
+          528.0, //C
+          594.0  //D
+        ]
+
+        this.duration = 600/1000
+        this.durationUpperBound = 700/1000
+        this.durationLowerBound = 200/1000
+
+        var startTime = this.ctx.currentTime
+
+        for(var i =0; i<6;i++){
+          console.log('another iteration', i)
+          this.droneFreq = this.scale[getRandomInt(0, this.scale.length)]
+          while(this.duration < this.durationUpperBound){
+            this.melodyFreq = this.scale[getRandomInt(0, this.scale.length)]
+            this.duration += (this.duration*getRandom(0,0.3))
+
+            this.playOsc(this.melodyFreq, startTime, this.duration)
+            this.playOsc(this.droneFreq, startTime, this.duration)
+            startTime += this.duration
+          }
+
+          while(this.duration > this.durationLowerBound){
+            this.duration -= this.duration * (getRandom(0,0.3))
+            this.melodyFreq = this.scale[getRandomInt(0, this.scale.length)]
+
+            this.playOsc(this.melodyFreq, startTime, this.duration)
+            this.playOsc(this.droneFreq, startTime, this.duration)
+            startTime += this.duration
+          }
+
+        }
+
 
         // load sound buffers
 
@@ -181,7 +243,7 @@
         var sineOsc = this.ctx.createOscillator()
         sineOsc.type = 'sine'
         sineOsc.frequency.value = freq
-        sineOsc.connect(this.ctx.destination)
+        sineOsc.connect(this.gain1)
         sineOsc.start(when)
         sineOsc.stop((when+duration))
       }

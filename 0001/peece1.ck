@@ -6,7 +6,6 @@ SinOsc drone => Gain droneMix => dac;
 
 700::ms => dur tempoUpperBound => dur tempo;
 200::ms => dur tempoLowerBound;
-30::ms  => dur tempoStep;
 
 //C Minor Scale
 [264.0, //C
@@ -35,8 +34,8 @@ while (true){
         tempo * Std.rand2f(0, 0.3) +=> tempo;
         scale[Std.rand2(0,6)] => melodyFreq => melody.freq;
       
+        <<< droneFreq,"hz,",melodyFreq,"hz,",tempo / ms,"ms1">>>;
         tempo +=> now;  
-        <<< droneFreq,"hz,",melodyFreq,"hz,",tempo / ms,"ms">>>;
     } until (tempo > tempoUpperBound);
     
     do {
@@ -44,10 +43,10 @@ while (true){
         scale[Std.rand2(3,8)] => melodyFreq => melody.freq;
         
         tempo +=> now;
-        <<< droneFreq,"hz,",melodyFreq,"hz,",tempo / ms,"ms">>>;
+        <<< droneFreq,"hz,",melodyFreq,"hz,",tempo / ms,"ms2">>>;
     } until (tempo <= tempoLowerBound);
     
     Std.rand2f(0, 200) * 1::ms => dur extraTime +=> now;
-    <<< droneFreq,"hz,",melodyFreq,"hz,",extraTime / ms,"ms">>>;
+    <<< droneFreq,"hz,",melodyFreq,"hz,",extraTime / ms,"ms3">>>;
 	<<<"","">>>;
 }
