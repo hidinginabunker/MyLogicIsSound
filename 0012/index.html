@@ -63,7 +63,19 @@
           - for some fucking reason calling stop() on an AudioSource will keep it from
             ever making a sound again, so you have to dynamically create and destroy 
             AudioSource nodes all the time
+          - the MajorScale or music theory objects are great candidates for the use
+            of the new getter and setter methods since the values are computed
+
+          1. play multiple oscillators simultaneously
+          2. play a triad in a scale
+          3. play a melody in that scale at the same time
       */
+
+      // but like only western classical
+      var MajorScale = function(tonicFreq) {
+        this.scaleIntervals = [2,2,1,2,2,2,1]
+        this.scaleFreqs = []
+      }
 
       var App = function() {
 
@@ -101,11 +113,6 @@
           self.buffer = buffer;
         }, function(e){ console.error('error loading sample', e)})
 
-        // create the initial oscillator
-        this.sineOsc = this.ctx.createOscillator()
-        this.sineOsc.type = 'sine'
-        this.sineOsc.connect(this.ctx.destination)
-
 
         //TODO, don't attach listeners until buffer is loaded
 
@@ -115,14 +122,31 @@
         }, false)
 
         this.playOscBtn.addEventListener('click', function(e){
-          console.log('yo', e)
-          self.playOsc(0)
+          console.log('playOscBtn')
+          var noteLength = 8
+          var scalar = 4
+          for(var i = 0; i < noteLength; i++ ) {
+            var rest = ((i/noteLength) * (1/2)) * scalar
+            console.log(rest)
+            self.playOsc(264.0*(i+1),self.ctx.currentTime+rest, 0.1)
+          }
         }, false)
 
         this.pauseOscBtn.addEventListener('click', function(e){
           console.log('hi', e)
           self.stopOsc(0)
         }, false)
+
+      }
+
+
+      App.prototype.playBars = function(numBars) {
+        var startTime = 0
+          , eightNoteTime = 1
+
+        for (var bar = 0; bar < numBars; bar++){
+          var time = startTime + bar * 8 * eighthNoteTime
+        }
 
       }
 
@@ -150,19 +174,16 @@
         src.buffer = buffer;
         src.connect(this.ctx.destination)
         src.start(when)
-        return src
       }
 
-      App.prototype.playOsc = function(when) {
-        this.sineOsc = this.sineOsc || this.ctx.createOscillator()
-        this.sineOsc.connect(this.ctx.destination)
-        this.sineOsc.start(when)
-      }
 
-      App.prototype.stopOsc = function(when) {
-        if(!this.sineOsc) return;
-        this.sineOsc.stop(when);
-        this.sineOsc = undefined;
+      App.prototype.playOsc = function(freq, when, duration) {
+        var sineOsc = this.ctx.createOscillator()
+        sineOsc.type = 'sine'
+        sineOsc.frequency.value = freq
+        sineOsc.connect(this.ctx.destination)
+        sineOsc.start(when)
+        sineOsc.stop((when+duration))
       }
 
       var app = new App();
