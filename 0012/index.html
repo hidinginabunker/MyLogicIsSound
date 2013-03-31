@@ -50,6 +50,37 @@
         <button id="pauseOscBtn">Pause</button>
       </div>
 
+      <div class="scaleControls">
+        <h2>Scale Controls</h2>
+
+        <h3>Tonic</h3>
+        <div id="tonicSelector">
+          <a href="#" data-freq='261.63'>C2</a>
+          <a href="#" data-freq='277.18'>C#Db2</a>
+          <a href="#" data-freq='293.66'>D2</a>
+          <a href="#" data-freq='311.13'>D#Eb2</a>
+          <a href="#" data-freq='329.63'>E2</a>
+          <a href="#" data-freq='349.23'>F2</a>
+          <a href="#" data-freq='369.99'>F#Gb2</a>
+          <a href="#" data-freq='392.00'>G2</a>
+          <a href="#" data-freq='415.30'>G#Ab2</a>
+          <a href="#" data-freq='440.00'>A2</a>
+          <a href="#" data-freq='466.16'>A#Bb2</a>
+          <a href="#" data-freq='493.88'>B2</a>
+        </div>
+
+        <h3>Mode</h3>
+        <div id="modeSelector">
+          <a href="#" data-mode="major">Major</a>
+          <a href="#" data-mode="minor">Minor</a>
+          <a href="#" data-mode="whole">Whole</a>
+        </div>
+
+        <h3>Gain</h3>
+        <input id="gain1Val" type="range" min="0.0" max="1.0" step="0.1" />
+
+      </div>
+
     </div>
 
     <script type="text/javascript">
@@ -61,21 +92,19 @@
           - A BuffersCollection that lets you get buffers by name when load buffer is called
             it would load to the buffers collection
           - for some fucking reason calling stop() on an AudioSource will keep it from
-            ever making a sound again, so you have to dynamically create and destroy 
+            ever making a sound again, so you have to dynamically create and destroy
             AudioSource nodes all the time
           - the MajorScale or music theory objects are great candidates for the use
             of the new getter and setter methods since the values are computed
 
-          1. play multiple oscillators simultaneously
-          2. play a triad in a scale
-          3. play a melody in that scale at the same time
+          - Fundamental problem: How to synchronize DOM events with the AudioContext time,
+            so when a start() is scheduled at some time in the future how can I get it to fire
+            an event!  Would I need an observer on that node polling it and throwing events
+            when it's state has changed somehow?
+
       */
 
       // but like only western classical
-      var MajorScale = function(tonicFreq) {
-        this.scaleIntervals = [2,2,1,2,2,2,1]
-        this.scaleFreqs = []
-      }
 
       function getRandomInt (min, max) {
           return Math.floor(Math.random() * (max - min + 1)) + min;
@@ -84,6 +113,41 @@
       function getRandom(min, max) {
           return Math.random() * (max - min) + min;
       }
+
+
+
+      var Scale = function(scaleMode, tonicFreq) {
+
+        this.tonicFreq = tonicFreq || 65.406
+
+        this.halfStep = 1
+        this.wholeStep = 2
+        this.octaves = 1  // maybe index scale frequencies by [octave][step]
+
+        this.modes = {
+          'major': [2,2,1,2,2,2,1],
+          'minor': [2,1,2,2,1,2,2],
+          'whole': [2,2,2,2,2]
+        }
+
+        this.mode = this.modes[scaleMode] || this.modes['major']
+
+        this.freqs = []
+        for (var i=0, steps=0; i < this.mode.length; i++ ) {
+          this.freqs.push(this.freqHalfStepsAway(this.tonicFreq, steps))
+          steps += this.mode[i]
+        }
+
+      }
+
+      Scale.prototype.freqHalfStepsAway = function (noteFreq, halfSteps) {
+        return (Math.pow(2, (halfSteps/12))) * noteFreq;
+      }
+
+
+
+
+
 
       var App = function() {
 
@@ -100,12 +164,6 @@
 
         var self = this
 
-        // set element references
-        this.playBufferBtn = document.getElementById('playBufferBtn')
-        this.playOscBtn    = document.getElementById('playOscBtn')
-        this.pauseOscBtn   = document.getElementById('pauseOscBtn')
-
-
         // create the audio context
 
         try {
@@ -116,99 +174,112 @@
           return
         }
 
-        // create two gain nodes
-        //TODO attach two html sliders to these gain nodes
+
+        this.tonicFreq = 261.63
+        this.scale = new Scale('minor', this.tonicFreq).freqs
+
+        // set element references
+        this.playBufferBtn = document.getElementById('playBufferBtn')
+        this.playOscBtn    = document.getElementById('playOscBtn')
+        this.pauseOscBtn   = document.getElementById('pauseOscBtn')
+        this.tonicSelector = document.getElementById('tonicSelector')
+        this.modeSelector  = document.getElementById('modeSelector')
+        this.gain1Val      = document.getElementById('gain1Val')
+
+
+        // attach the tonic selector
+        this.tonicSelector.addEventListener('click', function(e){
+          e.preventDefault()
+          self.tonicFreq = parseFloat(e.target.dataset.freq, 10)
+          console.log(self.tonicFreq)
+        })
+
+        // attach the mode selector
+        this.modeSelector.addEventListener('click', function(e) {
+          e.preventDefault()
+          self.scale = new Scale(e.target.dataset.mode, self.tonicFreq).freqs
+          console.log(self.scale)
+        })
+
+        // attach the gain control
+        this.gain1Val.addEventListener('change', function(e) {
+          e.preventDefault()
+          self.gain1.gain.value = e.target.value
+          console.log(self.gain1.gain.value)
+        })
+
+
+        // create a gain nodes
         this.gain1 = this.ctx.createGainNode()
-        this.gain2 = this.ctx.createGainNode()
-
         this.gain1.gain.value = 0.5
-
         this.gain1.connect(this.ctx.destination)
-        this.gain2.connect(this.ctx.destination)
-
-        // create static C minor scale
-        this.scale = [
-          264.0, //C
-          297.0, //D
-          316.8, //E
-          352.0, //F
-          396.0, //G
-          442.4, //A
-          475.4, //B
-          528.0, //C
-          594.0  //D
-        ]
 
         this.duration = 600/1000
         this.durationUpperBound = 700/1000
         this.durationLowerBound = 200/1000
 
-        var startTime = this.ctx.currentTime
 
-        for(var i =0; i<6;i++){
-          console.log('another iteration', i)
-          this.droneFreq = this.scale[getRandomInt(0, this.scale.length)]
-          while(this.duration < this.durationUpperBound){
-            this.melodyFreq = this.scale[getRandomInt(0, this.scale.length)]
-            this.duration += (this.duration*getRandom(0,0.3))
+        // make a function that plays the oscillators
+        this.playPiece = function(reps) {
+          for(var i =0, startTime = this.ctx.currentTime; i < reps; i++) {
 
-            this.playOsc(this.melodyFreq, startTime, this.duration)
-            this.playOsc(this.droneFreq, startTime, this.duration)
-            startTime += this.duration
+            this.droneFreq = this.scale[getRandomInt(0, this.scale.length)]
+
+            while(this.duration < this.durationUpperBound){
+              this.melodyFreq = this.scale[getRandomInt(0, this.scale.length)]
+              this.duration += (this.duration*getRandom(0,0.3))
+
+              this.playOsc(this.melodyFreq, startTime, this.duration)
+              this.playOsc(this.droneFreq, startTime, this.duration)
+              startTime += this.duration
+            }
+
+            while(this.duration > this.durationLowerBound){
+              this.duration -= this.duration * (getRandom(0,0.3))
+              this.melodyFreq = this.scale[getRandomInt(0, this.scale.length)]
+
+              this.playOsc(this.melodyFreq, startTime, this.duration)
+              this.playOsc(this.droneFreq, startTime, this.duration)
+              startTime += this.duration
+            }
+
           }
-
-          while(this.duration > this.durationLowerBound){
-            this.duration -= this.duration * (getRandom(0,0.3))
-            this.melodyFreq = this.scale[getRandomInt(0, this.scale.length)]
-
-            this.playOsc(this.melodyFreq, startTime, this.duration)
-            this.playOsc(this.droneFreq, startTime, this.duration)
-            startTime += this.duration
-          }
-
         }
 
 
         // load sound buffers
 
         this.loadBuffer('coin.mp3', function(buffer){
+          // store ref to buffer
           self.buffer = buffer;
+
+          // now that buffer is loaded, attach event listener to play it
+          self.playBufferBtn.addEventListener('click', function(e){
+            self.playBuffer(self.buffer, 0)
+          }, false)
+
         }, function(e){ console.error('error loading sample', e)})
 
 
-        //TODO, don't attach listeners until buffer is loaded
-
-        // attach event listeners
-        this.playBufferBtn.addEventListener('click', function(e){
-          self.playBuffer(self.buffer, 0)
-        }, false)
-
+        // attach osc event listeners
         this.playOscBtn.addEventListener('click', function(e){
-          console.log('playOscBtn')
+          self.playPiece(4)
+        }, false)
+/*
+        this.playOscBtn.addEventListener('click', function(e){
           var noteLength = 8
-          var scalar = 4
+          var scalar = 1
           for(var i = 0; i < noteLength; i++ ) {
             var rest = ((i/noteLength) * (1/2)) * scalar
             console.log(rest)
             self.playOsc(264.0*(i+1),self.ctx.currentTime+rest, 0.1)
           }
         }, false)
+*/
 
         this.pauseOscBtn.addEventListener('click', function(e){
-          console.log('hi', e)
           self.stopOsc(0)
         }, false)
-
-      }
-
-
-      App.prototype.playBars = function(numBars) {
-        var startTime = 0
-          , eightNoteTime = 1
-
-        for (var bar = 0; bar < numBars; bar++){
-          var time = startTime + bar * 8 * eighthNoteTime
-        }
 
       }
 
@@ -239,13 +310,13 @@
       }
 
 
-      App.prototype.playOsc = function(freq, when, duration) {
+      App.prototype.playOsc = function(freq, when, until) {
         var sineOsc = this.ctx.createOscillator()
         sineOsc.type = 'sine'
         sineOsc.frequency.value = freq
         sineOsc.connect(this.gain1)
         sineOsc.start(when)
-        sineOsc.stop((when+duration))
+        sineOsc.stop((when+until))
       }
 
       var app = new App();
