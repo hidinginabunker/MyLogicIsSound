@@ -39,11 +39,6 @@
 
     <div class="controls">
 
-      <div class="bufferControls">
-        <h2>Sound Buffer Controls</h2>
-        <button id="playBufferBtn">Play</button>
-      </div>
-
       <div class="oscControls">
         <h2>Oscillator Controls</h2>
         <button id="playOscBtn">Play</button>
@@ -84,27 +79,6 @@
     </div>
 
     <script type="text/javascript">
-      /* Notes
-         TODO:
-          - resample
-          - rethumbnail
-          - eventually we should think of the audio context as a directed graph
-          - A BuffersCollection that lets you get buffers by name when load buffer is called
-            it would load to the buffers collection
-          - for some fucking reason calling stop() on an AudioSource will keep it from
-            ever making a sound again, so you have to dynamically create and destroy
-            AudioSource nodes all the time
-          - the MajorScale or music theory objects are great candidates for the use
-            of the new getter and setter methods since the values are computed
-
-          - Fundamental problem: How to synchronize DOM events with the AudioContext time,
-            so when a start() is scheduled at some time in the future how can I get it to fire
-            an event!  Would I need an observer on that node polling it and throwing events
-            when it's state has changed somehow?
-
-      */
-
-      // but like only western classical
 
       function getRandomInt (min, max) {
           return Math.floor(Math.random() * (max - min + 1)) + min;
@@ -174,6 +148,37 @@
           return
         }
 
+        // scheduling stuff
+        this.lookahead = 25.0; //milliseconds
+        this.scheduleAheadTime = 0.1; //milliseconds
+        this.notesScheduled = [] //keep track of notes scheduled in the audio context so we can update the dom with it
+        this.timerID = null
+
+        this.scheduler = function() {
+          while(self.nextNoteTime < self.ctx.currentTime + self.scheduleAheadTime) {
+
+            while(self.duration < self.durationUpperBound) {
+              self.melodyFreq = self.scale[getRandomInt(0, self.scale.length)]
+              self.duration += (self.duration*getRandom(0,0.3))
+
+              self.scheduleNote(self.melodyFreq, self.nextNoteTime, self.duration)
+              self.nextNoteTime += self.duration
+            }
+
+            while(self.duration > self.durationLowerBound) {
+              self.melodyFreq = self.scale[getRandomInt(0, self.scale.length)]
+              self.duration -= self.duration*(getRandom(0,0.3))
+
+              self.scheduleNote(self.melodyFreq, self.nextNoteTime, self.duration)
+              self.nextNoteTime += self.duration
+            }
+
+            console.log(self.melodyFreq, self.nextNoteTime, self.duration)
+
+          }
+          self.timerID = window.setTimeout( self.scheduler, self.lookahead)
+        }
+
 
         this.tonicFreq = 261.63
         this.scale = new Scale('minor', this.tonicFreq).freqs
@@ -219,97 +224,42 @@
         this.durationLowerBound = 200/1000
 
 
-        // make a function that plays the oscillators
-        this.playPiece = function(reps) {
-          for(var i =0, startTime = this.ctx.currentTime; i < reps; i++) {
-
-            this.droneFreq = this.scale[getRandomInt(0, this.scale.length)]
-
-            while(this.duration < this.durationUpperBound){
-              this.melodyFreq = this.scale[getRandomInt(0, this.scale.length)]
-              this.duration += (this.duration*getRandom(0,0.3))
-
-              this.playOsc(this.melodyFreq, startTime, this.duration)
-              this.playOsc(this.droneFreq, startTime, this.duration)
-              startTime += this.duration
-            }
-
-            while(this.duration > this.durationLowerBound){
-              this.duration -= this.duration * (getRandom(0,0.3))
-              this.melodyFreq = this.scale[getRandomInt(0, this.scale.length)]
-
-              this.playOsc(this.melodyFreq, startTime, this.duration)
-              this.playOsc(this.droneFreq, startTime, this.duration)
-              startTime += this.duration
-            }
-
-          }
-        }
-
-
-        // load sound buffers
-
-        this.loadBuffer('coin.mp3', function(buffer){
-          // store ref to buffer
-          self.buffer = buffer;
-
-          // now that buffer is loaded, attach event listener to play it
-          self.playBufferBtn.addEventListener('click', function(e){
-            self.playBuffer(self.buffer, 0)
-          }, false)
-
-        }, function(e){ console.error('error loading sample', e)})
-
-
         // attach osc event listeners
         this.playOscBtn.addEventListener('click', function(e){
-          self.playPiece(4)
+          self.play()
+          console.log('playing')
         }, false)
-/*
-        this.playOscBtn.addEventListener('click', function(e){
-          var noteLength = 8
-          var scalar = 1
-          for(var i = 0; i < noteLength; i++ ) {
-            var rest = ((i/noteLength) * (1/2)) * scalar
-            console.log(rest)
-            self.playOsc(264.0*(i+1),self.ctx.currentTime+rest, 0.1)
-          }
-        }, false)
-*/
 
         this.pauseOscBtn.addEventListener('click', function(e){
-          self.stopOsc(0)
+          self.pause()
+          console.log('pausing')
         }, false)
 
       }
 
 
-      // asynchronously loads an audio file to a buffer
-      App.prototype.loadBuffer = function(url, onSuccess, onError) {
-        // onSuccess(buffer) passes the audio buffer to the callback
-        var self = this
-          , req = new XMLHttpRequest();
+      App.prototype.scheduleNote = function(freq, when, until) {
 
-        req.open('GET', url, true)
-        req.responseType = 'arraybuffer' // this is audio data sucka
+        this.notesScheduled.push({
+          freq: freq,
+          when: when,
+          until: until
+        })
 
-        req.onload = function() {
-          self.ctx.decodeAudioData(req.response, onSuccess, onError)
-        }
+        this.playOsc(freq, when, until)
+      }
 
-        req.send()
+      App.prototype.play = function() {
+        this.nextNoteTime = this.ctx.currentTime;
+        this.scheduler()  // kick off scheduling
+      }
+
+      App.prototype.pause = function() {
+        window.clearTimeout( this.timerID );
       }
 
 
-      // plays a given buffer of samples
-      App.prototype.playBuffer = function(buffer, when) {
-        var src = this.ctx.createBufferSource()
-        src.buffer = buffer;
-        src.connect(this.ctx.destination)
-        src.start(when)
-      }
-
-
+      // play an oscillator frequency
       App.prototype.playOsc = function(freq, when, until) {
         var sineOsc = this.ctx.createOscillator()
         sineOsc.type = 'sine'
@@ -318,6 +268,7 @@
         sineOsc.start(when)
         sineOsc.stop((when+until))
       }
+
 
       var app = new App();
 
